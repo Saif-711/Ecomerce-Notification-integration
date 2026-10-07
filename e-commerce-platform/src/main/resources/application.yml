@@ -31,8 +31,22 @@ logging:
     com.ecommerce.platform: DEBUG
     org.springframework.retry: DEBUG
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      notificationService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 2
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 1
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        recordExceptions:
+          - org.springframework.web.client.RestClientException
+
 # Notification System Integration
 notification:
   service:
-    url: http://localhost:8090
+    url: http://localhost:8082
     endpoint: /notifications

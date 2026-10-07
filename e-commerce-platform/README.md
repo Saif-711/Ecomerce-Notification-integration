@@ -290,3 +290,181 @@ public Shipment createShipment(Long userId, Long orderId, String shippingAddress
 - **Lombok**
 - **RestTemplate** (for HTTP client)
 - **Jakarta Validation**
+
+
+
+
+## Circuit Breaker
+
+```text
+Client        E-Commerce       Circuit Breaker      Notification
+	|                |                  |                  |
+	|  POST Order    |                  |                  |
+	|--------------->|                  |                  |
+	|                |                  |                  |
+	|                | Send notification|                  |
+	|                |----------------->|                  |
+	|                |                  |----------------->|
+	|                |                  |       500        |
+	|                |                  |<-----------------|
+	|                |                  |                  |
+	|                |                  | failure count   |
+	|                |                  |        ^         |
+	|                |                  |                  |
+	|                |   ...more failed requests...       |
+	|                |                  |                  |
+	|                |                  |  threshold hit   |
+	|                |                  |                  |
+	|                |                  |  OPEN            |
+	|                |                  |                  |
+	|                | Next request     |                  |
+	|                |----------------->|                  |
+	|                |                  |                  |
+	|                |                  | REJECT           |
+	|                |<-----------------|                  |
+	|                |                  |                  |
+```
+
+```text
+                   ADD Order
+                       |
+                       v
+               NotificationClient
+                       |
+                Circuit Breaker
+                 /           \
+             CLOSED           OPEN
+                |               |
+                v               v
+              Retry          Fallback
+                |               |
+                v               v
+          Notification       Skip request
+```
+
+```text
+┌────────┐      ┌─────────────┐      ┌────────────────┐      ┌──────────────┐
+│ Client │      │ E-Commerce  │      │ Circuit Breaker│      │ Notification │
+│        │      │   Service   │      │ notificationSvc│      │   Service    │
+└───┬────┘      └──────┬──────┘      └───────┬────────┘      └──────┬───────┘
+	│                  │                     │                      │
+	│ POST /orders     │                     │                      │
+	│─────────────────>│                     │                      │
+	│                  │ sendNotification()  │                      │
+	│                  │────────────────────>│                      │
+	│                  │                     │                      │
+	│                  │                     │ STATE = CLOSED      │
+	│                  │                     │                      │
+	│                  │                     │────── request ──────>│
+	│                  │                     │                      │
+	│                  │                     │<────── 200 OK ───────│
+	│                  │                     │                      │
+	│                  │<────────────────────│                      │
+	│<─────────────────│  Order successful  │                      │
+	│                  │                     │                      │
+	│                  │                     │
+	│                  │   ┌─────────────────────────────────────┐
+	│                  │   │ FAILURE SCENARIO                    │
+	│                  │   │                                     │
+	│                  │   │ Notification Service fails          │
+	│                  │   │ → Retry attempts occur              │
+	│                  │   │ → Circuit records failure           │
+	│                  │   └─────────────────────────────────────┘
+	│                  │                     │
+	│ POST /orders     │                     │
+	│─────────────────>│                     │
+	│                  │ sendNotification()  │
+	│                  │────────────────────>│
+	│                  │                     │ STATE = CLOSED      │
+	│                  │                     │
+	│                  │                     │────── request ──────>│
+	│                  │                     │<────── 500 ──────────│
+	│                  │                     │                      │
+	│                  │                     │ Record failure #1   │
+	│                  │                     │                      │
+	│                  │                     │
+	│ POST /orders     │                     │
+	│─────────────────>│                     │
+	│                  │ sendNotification()  │
+	│                  │────────────────────>│
+	│                  │                     │ STATE = CLOSED      │
+	│                  │                     │                      │
+	│                  │                     │────── request ──────>│
+	│                  │                     │<────── 500 ──────────│
+	│                  │                     │                      │
+	│                  │                     │ Record failure #2   │
+	│                  │                     │                      │
+	│                  │                     │ Calls = 2            │
+	│                  │                     │ Failures = 2         │
+	│                  │                     │ Failure Rate = 100%  │
+	│                  │                     │                      │
+	│                  │                     │ 100% >= 50%          │
+	│                  │                     │                      │
+	│                  │                     │ STATE: CLOSED        │
+	│                  │                     │         ↓            │
+	│                  │                     │       OPEN            │
+	│                  │                     │                      │
+	│                  │                     │
+	│ POST /orders     │                     │                      │
+	│─────────────────>│                     │                      │
+	│                  │ sendNotification()  │                      │
+	│                  │────────────────────>│                      │
+	│                  │                     │ STATE = OPEN         │
+	│                  │                     │                      │
+	│                  │                     │ X  Request rejected  │
+	│                  │                     │                      │
+	│                  │                     │ CallNotPermitted     │
+	│                  │                     │ Exception             │
+	│                  │                     │                      │
+	│                  │<────────────────────│                      │
+	│                  │ Circuit fallback    │                      │
+	│                  │                     │                      │
+	│                  │                     │      WAIT 10s         │
+	│                  │                     │──────────────────────│
+	│                  │                     │                      │
+	│                  │                     │ STATE = HALF_OPEN    │
+	│                  │                     │                      │
+	│ POST /orders     │                     │                      │
+	│─────────────────>│                     │                      │
+	│                  │ sendNotification()  │                     │
+	│                  │────────────────────>│                     │
+	│                  │                     │ HALF_OPEN             │
+	│                  │                     │                      │
+	│                  │                     │ One trial request    │
+	│                  │                     │────── request ──────>│
+	│                  │                     │                      │
+	│                  │                     │        ┌─────────────┐│
+	│                  │                     │<───────│   RESULT    ││
+	│                  │                     │        └──────┬──────┘│
+	│                  │                     │               │       │
+	│                  │                     │       ┌───────┴──────┐│
+	│                  │                     │       │              ││
+	│                  │                     │    SUCCESS        FAILURE
+	│                  │                     │       │              ││
+	│                  │                     │       ▼              ▼│
+	│                  │                     │    CLOSED           OPEN
+	│                  │                     │       │              ││
+	│                  │                     │       │          Wait 10s
+	│                  │                     │       │              ││
+	│                  │                     │       │              └─┐
+	│                  │                     │       │                │
+	│                  │                     │       │                │
+	│                  │<────────────────────│       │                │
+	│<─────────────────│       success      │       │                │
+	│                  │                     │       │                │
+```
+
+```text
+				 failure rate >= 50%
+		  ┌─────────────────────────┐
+		  │                         ▼
+	   CLOSED ───────────────────> OPEN
+		  ▲                          │
+		  │                          │ 10 seconds
+		  │                          ▼
+		  │                      HALF_OPEN
+		  │                       │       │
+		  │                    success   failure
+		  │                       │       │
+		  └───────────────────────┘       └──> OPEN
+```
