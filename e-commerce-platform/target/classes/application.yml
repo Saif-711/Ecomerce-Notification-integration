@@ -24,6 +24,14 @@ spring:
       hibernate:
         format_sql: true
 
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 10
+        queue-capacity: 100
+        thread-name-prefix: async-
+
 logging:
   file:
     name: logs/ecommerce-platform.log
@@ -44,6 +52,13 @@ resilience4j:
         automaticTransitionFromOpenToHalfOpenEnabled: true
         recordExceptions:
           - org.springframework.web.client.RestClientException
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
 
 # Notification System Integration
 notification:

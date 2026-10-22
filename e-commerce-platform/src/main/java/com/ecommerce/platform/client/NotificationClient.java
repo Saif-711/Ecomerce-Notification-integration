@@ -13,11 +13,13 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 @Component
 public class NotificationClient {
@@ -46,6 +48,20 @@ public class NotificationClient {
     )
     public void sendNotification(Long userId, NotificationChannel channel, String message) {
         sendNotification(userId, channel, message, null);
+    }
+
+    @Async("notificationExecutor")
+    @CircuitBreaker(name = "notificationService",
+    fallbackMethod = "sendNotificationCircuitBreakerFallbackAsync")
+    public CompletableFuture<Void> sendNotificationAsync(Long userId, NotificationChannel channel, String message) {
+        try {
+            sendNotification(userId, channel, message, null);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 
     @CircuitBreaker(name = "notificationService", fallbackMethod = "sendNotificationCircuitBreakerFallback")
@@ -137,5 +153,16 @@ public class NotificationClient {
 
     private void logCircuitOpen(CallNotPermittedException e) {
         log.warn("Notification circuit breaker is open; skipping request: {}", e.getMessage());
+    }
+
+    // Async circuit breaker fallback
+    public CompletableFuture<Void> sendNotificationCircuitBreakerFallbackAsync(Long userId,
+                                                                                NotificationChannel channel,
+                                                                                String message,
+                                                                                CallNotPermittedException e) {
+        logCircuitOpen(e);
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        future.completeExceptionally(e);
+        return future;
     }
 }

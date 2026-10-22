@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CompletableFuture;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -27,17 +28,44 @@ public class OrderService {
     @Transactional
     public Order createOrder(Long userId, BigDecimal totalAmount) {
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        
+
         Order order = new Order(userId, orderNumber, totalAmount);
         order = orderRepository.save(order);
-        
+
         log.info("Order created: {}", orderNumber);
-        
+
         // Send notification to user
-        String message = String.format("Order #%s confirmed! Total: $%.2f. Thank you for your purchase.", 
+        String message = String.format("Order #%s confirmed! Total: $%.2f. Thank you for your purchase.",
                 orderNumber, totalAmount);
         notificationClient.sendNotification(userId, NotificationChannel.EMAIL, message);
-        
+
+        return order;
+    }
+
+    @Transactional
+    public Order createOrderAsync(Long userId, BigDecimal totalAmount) {
+        String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+
+        Order order = new Order(userId, orderNumber, totalAmount);
+        order = orderRepository.save(order);
+
+        log.info("Order created (async notification): {}", orderNumber);
+
+        // Send notification asynchronously - doesn't block order creation
+        String message = String.format("Order #%s confirmed! Total: $%.2f. Thank you for your purchase.",
+                orderNumber, totalAmount);
+        CompletableFuture<Void> notificationFuture = notificationClient.sendNotificationAsync(
+                userId, NotificationChannel.EMAIL, message);
+
+        // Handle async completion (optional - for logging or error handling)
+        notificationFuture.whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Async notification failed for order {}: {}", orderNumber, ex.getMessage());
+            } else {
+                log.info("Async notification sent successfully for order {}", orderNumber);
+            }
+        });
+
         return order;
     }
 
