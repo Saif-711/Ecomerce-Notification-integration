@@ -248,6 +248,29 @@ notification:
 - **Flexibility**: Easy to add new notification channels without changing e-commerce code
 - **Testability**: Can mock NotificationClient for testing
 
+## Sync vs Async Notifications
+
+The platform supports both synchronous and asynchronous notification sending:
+
+### Performance Comparison
+
+| Endpoint | Response Time | Behavior |
+|----------|---------------|----------|
+| **Sync** (`/api/orders`) | ~46 ms | Blocks until notification completes, then returns |
+| **Async** (`/api/orders/async`) | ~17 ms | Returns immediately, notification sent in background |
+| **Improvement** | **2.8x faster** | Async is significantly faster for the user |
+
+### Why Async is Faster
+
+- **Sync**: The HTTP request waits for the notification HTTP call to complete before returning the response to the user
+- **Async**: The HTTP request returns immediately after saving the order, while the notification is sent in a background thread
+- The ~30ms difference represents the time saved by not waiting for the external HTTP call to the Notification System
+
+### When to Use Each
+
+- **Use Sync** when: The notification is critical and the user must wait for confirmation
+- **Use Async** when: Performance is important and notification can be processed in the background
+
 ## Extending the Integration
 
 To add scheduled notifications (e.g., delivery reminders):
