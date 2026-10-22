@@ -51,17 +51,28 @@ public class NotificationClient {
     }
 
     @Async("notificationExecutor")
+    @Retryable(
+            retryFor = RestClientException.class,
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000),
+            recover = "sendNotificationRecoveryAsync"
+    )
     @CircuitBreaker(name = "notificationService",
     fallbackMethod = "sendNotificationCircuitBreakerFallbackAsync")
     public CompletableFuture<Void> sendNotificationAsync(Long userId, NotificationChannel channel, String message) {
-        try {
-            sendNotification(userId, channel, message, null);
-            return CompletableFuture.completedFuture(null);
-        } catch (Exception e) {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(e);
-            return future;
-        }
+        sendNotification(userId, channel, message, null);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Recover
+    public CompletableFuture<Void> sendNotificationRecoveryAsync(RestClientException e,
+                                                                   Long userId,
+                                                                   NotificationChannel channel,
+                                                                   String message) {
+        log.error("Failed to send notification after 3 retry attempts (async): error={}", e.getMessage());
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        future.completeExceptionally(e);
+        return future;
     }
 
     @CircuitBreaker(name = "notificationService", fallbackMethod = "sendNotificationCircuitBreakerFallback")

@@ -37,7 +37,7 @@ logging:
     name: logs/ecommerce-platform.log
   level:
     com.ecommerce.platform: DEBUG
-    org.springframework.retry: DEBUG
+    org.springframework.retry: TRACE
 
 resilience4j:
   circuitbreaker:
