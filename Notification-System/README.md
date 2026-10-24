@@ -1,129 +1,240 @@
-# Notification System — beginner guide
-This project is a small **notification platform**. A client (another app, or you with `curl`) sends a request like “email user 50”. The API **does not send the email immediately**. It saves the job in **MySQL**, puts a message on **Kafka**, and background **workers** finish the send.
-Think of it like a restaurant:
-| Real life | This system |
-|-----------|-------------|
-| You place an order | `POST /notifications` |
-| Kitchen ticket is written down | Row in MySQL (`PENDING`) |
-| Ticket goes on a conveyor | Kafka topic |
-| Cooks pick up tickets | Processor + workers |
-| Dish is served | Status becomes `SENT` |
-You do **not** need to be a Kafka expert. Read this file top to bottom.
----
-## What you need on your computer
+# Notification System
+
+A microservice for sending notifications (Email, SMS, Webhook) using **Kafka** for asynchronous processing.
+
+## Architecture
+
+```mermaid
+graph LR
+    Client[E-commerce Platform] -->|POST /notifications|> NotificationSystem[Notification System]
+    NotificationSystem -->|Save to MySQL|> MySQL[(MySQL)]
+    NotificationSystem -->|Publish to Kafka|> Kafka[(Kafka)]
+    Kafka -->|Consume|> Processor[Processor]
+    Processor -->|Route to channel topic|> EmailNotifications[Email Notifications]
+    Processor -->|Route to channel topic|> SMSNotifications[SMS Notifications]
+    Processor -->|Route to channel topic|> WebhookNotifications[Webhook Notifications]
+    EmailNotifications -->|Consume|> EmailWorker[Email Worker]
+    SMSNotifications -->|Consume|> SMSWorker[SMS Worker]
+    WebhookNotifications -->|Consume|> WebhookWorker[Webhook Worker]
+    EmailWorker -->|Send Email|> Email[Email]
+    SMSWorker -->|Send SMS|> SMS[SMS]
+    WebhookWorker -->|Send Webhook|> Webhook[Webhook]
+    EmailWorker -->|Update MySQL|> MySQL
+    SMSWorker -->|Update MySQL|> MySQL
+    WebhookWorker -->|Update MySQL|> MySQL
+```
+
+## How It Works
+
+1. **Client sends request** - HTTP POST to `/notifications`
+2. **Notification System saves to MySQL** - Status = `PENDING`
+3. **Event published to Kafka** - Background workers will process it
+4. **Processor routes to channel topic** - email/sms/webhook
+5. **Workers consume from Kafka** - Read the event
+6. **Send notification** - Email/SMS/etc.
+7. **Update MySQL status** - Status = `SENT`
+
+## Prerequisites
+
 - **Java 17**
-- **Maven** (or your IDE’s Maven)
+- **Maven**
 - **Docker Desktop** (for MySQL + Kafka)
-The Spring Boot app is **one process**. MySQL and Kafka run in **Docker**.
----
-## Folder map
+
+## Quick Start
+
+### 1. Start Infrastructure
+
+```bash
+cd Notification-System
+docker-compose up -d
 ```
-Notification-System/
-├── docker-compose.yml          ← starts MySQL and Kafka
-├── README.md                   ← this file
-└── notification-service/       ← the Java application
-    ├── pom.xml
-    └── src/main/java/com/notificationsystem/notificationservice/
-        ├── NotificationServiceApplication.java   ← start here
-        ├── controller/     ← HTTP API
-        ├── service/        ← create + publish + mark SENT
-        ├── processor/      ← Kafka router (notifications → channel topics)
-        ├── worker/         ← email / SMS / webhook consumers
-        ├── scheduler/      ← timer for future notifications
-        ├── config/         ← creates Kafka topics
-        ├── domain/         ← MySQL table mapping
-        ├── repository/     ← SQL access
-        ├── event/          ← Kafka message shape
-        ├── dto/            ← HTTP JSON shape
-        └── model/          ← enums (EMAIL/SMS/WEBHOOK, statuses)
+
+This starts:
+- **MySQL** on port `3307`
+- **Kafka** on port `9092`
+
+### 2. Run the Application
+
+```bash
+cd notification-service
+mvn spring-boot:run
 ```
----
-## Pieces of the system (infrastructure)
-These are **not** Java classes. They are programs started by Docker.
-```mermaid
-flowchart LR
-  subgraph docker ["Docker Compose"]
-    MySQL["MySQL 8<br/>localhost:3307<br/>database: notifications"]
-    Kafka["Apache Kafka 3.7.1<br/>localhost:9092<br/>KRaft mode (no ZooKeeper)"]
-  end
-  App["Spring Boot app<br/>localhost:8082"]
-  App --> MySQL
-  App --> Kafka
+
+The application will start on `http://localhost:8082`
+
+### 3. Send a Notification
+
+```bash
+curl -X POST http://localhost:8082/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 100,
+    "channel": "EMAIL",
+    "message": "Your order has been confirmed!"
+  }'
 ```
-| Service | Image | Port on your PC | What it stores / does |
-|---------|--------|-----------------|------------------------|
-| **MySQL** | `mysql:8.0` | `3307` → container `3306` | The `notifications` table: who, what, when, status |
-| **Kafka** | `apache/kafka:3.7.1` | `9092` | Topics (mailboxes). Messages wait here until consumers read them |
-Credentials (from `docker-compose.yml` and `application.yml`):
-- Database: `notifications`
-- User: `notification` / password: `notification`
-- Root password: `root` (only if you log in as root)
-Kafka uses **KRaft** (`KAFKA_PROCESS_ROLES: broker,controller`). There is **no ZooKeeper** in this project.
----
-## How a notification travels (big picture)
-```mermaid
-flowchart TB
-  Client["Client<br/>POST /notifications"]
-  API["NotificationController"]
-  Svc["NotificationService"]
-  DB[("MySQL<br/>status PENDING")]
-  Sched["NotificationScheduler<br/>every 1 second"]
-  T1["Kafka topic<br/>notifications"]
-  Proc["NotificationProcessor<br/>CONSUMER of notifications<br/>PRODUCER of channel topics"]
-  TE["email-notifications"]
-  TS["sms-notifications"]
-  TW["webhook-notifications"]
-  EW["EmailWorker"]
-  SW["SmsWorker"]
-  WW["WebhookWorker"]
-  DB2[("MySQL<br/>status SENT")]
-  Client --> API --> Svc
-  Svc --> DB
-  Svc -->|"send now"| T1
-  DB --> Sched
-  Sched -->|"due jobs"| Svc
-  T1 --> Proc
-  Proc --> TE --> EW
-  Proc --> TS --> SW
-  Proc --> TW --> WW
-  EW --> DB2
-  SW --> DB2
-  WW --> DB2
+
+Response:
+```json
+{
+  "id": 1,
+  "userId": 100,
+  "channel": "EMAIL",
+  "message": "Your order has been confirmed!",
+  "status": "PENDING",
+  "createdAt": "2024-10-24T18:00:00"
+}
 ```
-**Immediate send** (`scheduledAt` missing or already in the past):
-1. HTTP request arrives.
-2. Row saved as `PENDING`, then claimed as `PROCESSING`.
-3. Event published to topic `notifications`.
-4. Processor copies it to the matching channel topic.
-5. Worker prints a fake “sent” line and marks the row `SENT`.
-**Scheduled send** (`scheduledAt` is in the future):
-1. HTTP request arrives.
-2. Row saved as `PENDING`. **No Kafka message yet.**
-3. Every second the scheduler looks for due `PENDING` rows.
-4. When time arrives, it calls the same `publish()` method as step 3 above.
-The API always returns **HTTP 202 Accepted** (“we received it; sending happens later”).
----
-## Kafka for beginners
-### Topic
-A **topic** is a named mailbox. Producers put messages in. Consumers take them out.
-This app creates **four** topics (`KafkaTopicConfig`):
-| Topic name | Role |
-|------------|------|
-| `notifications` | First mailbox. Every job lands here (after it is due). |
-| `email-notifications` | Only email jobs. |
-| `sms-notifications` | Only SMS jobs. |
-| `webhook-notifications` | Only webhook jobs. |
-Why not one topic? So you can scale **email workers** independently from **SMS workers**. The processor is a **router**.
-Each topic has **3 partitions** and **1 replica** (learning setup). Partitions let several consumers in the **same group** share work. One replica is enough on a laptop; production would use more copies.
-### Producer vs consumer
-- **Producer** = code that **writes** to Kafka (`kafkaTemplate.send(...)`).
-- **Consumer** = code that **reads** from Kafka (`@KafkaListener`).
-The **same Java app** is both: it produces after the API/scheduler, and it consumes in the processor and workers.
-### Kafka key
-Messages are sent with **key = `userId`**. Same user always goes to the same partition, so that user’s notifications stay **in order**.
-### Consumer group
-`groupId` is a **team name**.
-- Several instances with the **same** `groupId` **share** messages (each message handled once by that team).
-- Different `groupId`s each get their **own copy** of the stream.
-That is why the processor and the email worker must **not** share a group: they listen to **different topics**, and they are different teams.
-### The Kafka message (payload)
+
+## API Endpoints
+
+### Create Notification
+
+**POST** `/notifications`
+
+Request body:
+```json
+{
+  "userId": 100,
+  "channel": "EMAIL",
+  "message": "Your order has been confirmed!",
+  "scheduledAt": "2024-10-25T10:00:00"
+}
+```
+
+**Channels:**
+- `EMAIL`
+- `SMS`
+- `WEBHOOK`
+
+**scheduledAt** (optional): If provided, notification will be sent at the specified time. If omitted or in the past, sent immediately.
+
+**Response:** `202 Accepted` with notification details
+
+### Get Notification Status
+
+**GET** `/notifications/{id}`
+
+Response:
+```json
+{
+  "id": 1,
+  "userId": 100,
+  "channel": "EMAIL",
+  "message": "Your order has been confirmed!",
+  "status": "SENT",
+  "createdAt": "2024-10-24T18:00:00",
+  "sentAt": "2024-10-24T18:00:05"
+}
+```
+
+**Statuses:**
+- `PENDING` - Waiting to be sent
+- `PROCESSING` - Being processed
+- `SENT` - Successfully sent
+- `FAILED` - Failed to send
+
+## Kafka Topics
+
+| Topic | Purpose |
+|-------|---------|
+| `notifications` | All notifications (entry point) |
+| `email-notifications` | Email notifications only |
+| `sms-notifications` | SMS notifications only |
+| `webhook-notifications` | Webhook notifications only |
+
+## Why Kafka?
+
+- **Asynchronous** - API returns immediately, processing happens in background
+- **Durable** - Messages are saved in Kafka, won't be lost
+- **Scalable** - Multiple workers can process messages in parallel
+- **Decoupled** - Producers and consumers don't know about each other
+
+## Database Schema
+
+**Table: `notifications`**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | BIGINT | Primary key |
+| `user_id` | BIGINT | User ID |
+| `channel` | VARCHAR | EMAIL/SMS/WEBHOOK |
+| `message` | TEXT | Notification message |
+| `status` | VARCHAR | PENDING/PROCESSING/SENT/FAILED |
+| `scheduled_at` | TIMESTAMP | When to send (nullable) |
+| `created_at` | TIMESTAMP | Creation time |
+| `sent_at` | TIMESTAMP | When sent (nullable) |
+
+## Configuration
+
+### MySQL
+- **Host:** `localhost:3307`
+- **Database:** `notifications`
+- **User:** `notification`
+- **Password:** `notification`
+
+### Kafka
+- **Host:** `localhost:9092`
+- **Mode:** KRaft (no ZooKeeper)
+
+## Project Structure
+
+```bash
+notification-service/
+├── controller/     ← HTTP API endpoints
+├── service/        ← Business logic
+├── processor/      ← Kafka router (notifications → channel topics)
+├── worker/         ← Email/SMS/Webhook consumers
+├── scheduler/      ← Timer for scheduled notifications
+├── config/         ← Kafka topics configuration
+├── domain/         ├── MySQL table mapping
+├── repository/     ← SQL access
+├── event/          ← Kafka message shape
+├── dto/            ← HTTP JSON shape
+└── model/          ← Enums (EMAIL/SMS/WEBHOOK, statuses)
+```
+
+## Integration with E-Commerce Platform
+
+The E-Commerce Platform integrates with this system via HTTP:
+
+```java
+// In E-Commerce Platform
+RestTemplate restTemplate = new RestTemplate();
+restTemplate.postForObject(
+    "http://localhost:8082/notifications",
+    notificationRequest,
+    NotificationResponse.class
+);
+```
+
+For resilience, the E-Commerce Platform uses:
+- **Retry** - 3 attempts with 1s delay
+- **Circuit Breaker** - Opens after 50% failure rate
+- **Async Processing** - Background thread for notifications
+
+## Troubleshooting
+
+**Notifications not being sent?**
+- Check Docker is running (`docker ps`)
+- Check MySQL and Kafka are accessible
+- Check application logs for errors
+
+**Kafka connection errors?**
+- Verify Kafka is running on port 9092
+- Check `docker-compose.yml` configuration
+- Restart Kafka if needed
+
+**Database connection errors?**
+- Verify MySQL is running on port 3307
+- Check database credentials in `application.yml`
+- Access MySQL console: `mysql -h localhost -P 3307 -u notification -p`
+
+## Technology Stack
+
+- **Spring Boot 3.x**
+- **Spring Kafka**
+- **Spring Data JPA**
+- **MySQL 8**
+- **Apache Kafka 3.7.1** (KRaft mode)
+- **Docker Compose**

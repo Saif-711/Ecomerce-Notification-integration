@@ -271,6 +271,68 @@ The platform supports both synchronous and asynchronous notification sending:
 - **Use Sync** when: The notification is critical and the user must wait for confirmation
 - **Use Async** when: Performance is important and notification can be processed in the background
 
+## Notification System Architecture
+
+The Notification System uses **Kafka** for asynchronous processing:
+
+```
+┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────┐
+│  E-Commerce Platform │      │  Notification System │      │     Kafka     │
+│                      │      │                      │      │              │
+│  POST /notifications │      │  ┌────────────────┐  │      │              │
+│  (userId, channel,  │─────>│  │  MySQL         │  │      │              │
+│   message)           │      │  │  (PENDING)     │  │      │              │
+│                      │      │  └────────────────┘  │      │              │
+│                      │      │         │            │      │              │
+│                      │      │         │ Publish    │      │              │
+│                      │      │         ├────────────>│      │              │
+│                      │      │         │            │      │              │
+│                      │      │         │            │      │   Topic      │
+│                      │      │         │            │      │   (events)   │
+│                      │      │         │            │      │              │
+│                      │      │         │            │      │              │
+│  Response (200 OK)   │      │         │            │      │              │
+│  <───────────────────┤      │         │            │      │              │
+│                      │      │         │            │      │              │
+│                      │      │         │            │      │              │
+└──────────────────────┘      │         │            │      │              │
+                              │         │            │      │              │
+                              │         │            │      │              │
+                              │         │            │      │              │
+                              │  ┌──────┴──────┐    │      │              │
+                              │  │   Workers   │    │      │              │
+                              │  └──────┬──────┘    │      │              │
+                              │         │            │      │              │
+                              │         │ Consume   │      │              │
+                              │         │<───────────┤      │              │
+                              │         │            │      │              │
+                              │         │ Send       │      │              │
+                              │         │ Notification│     │              │
+                              │         │            │      │              │
+                              │         │            │      │              │
+                              │         │ Update     │      │              │
+                              │         │ (SENT)     │      │              │
+                              │         └────────────>│      │              │
+                              │                      │      │              │
+                              └──────────────────────┘      └──────────────┘
+```
+
+### How It Works:
+
+1. **E-commerce sends request** - HTTP POST to `/notifications`
+2. **Notification System saves to MySQL** - Status = `PENDING`
+3. **Event published to Kafka** - Background workers will process it
+4. **Workers consume from Kafka** - Read the event
+5. **Send notification** - Email/SMS/etc.
+6. **Update MySQL status** - Status = `SENT`
+
+### Why Kafka?
+
+- **Asynchronous** - E-commerce doesn't wait for notification to complete
+- **Durable** - Messages are saved in Kafka, won't be lost
+- **Scalable** - Multiple workers can process messages in parallel
+- **Decoupled** - E-commerce doesn't know about notification details
+
 ## Extending the Integration
 
 To add scheduled notifications (e.g., delivery reminders):
