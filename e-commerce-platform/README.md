@@ -107,16 +107,19 @@ The platform will start on `http://localhost:8083`
 
 | Endpoint | Method | Description | Notification Sent |
 |----------|--------|-------------|-------------------|
-| `/api/orders` | POST | Create a new order | EMAIL: Order confirmation |
+| `/api/orders` | POST | Create a new order (sync notification) | EMAIL: Order confirmation |
+| `/api/orders/async` | POST | Create a new order (async notification) | EMAIL: Order confirmation |
 | `/api/orders/{id}/ship` | POST | Mark order as shipped | EMAIL: Shipping notification |
 | `/api/orders/{id}/deliver` | POST | Mark order as delivered | SMS: Delivery notification |
 | `/api/orders/{id}` | GET | Get order details | None |
+| `/api/orders/{id}/notification-status` | GET | Get notification status for order | None |
 
 **Create Order Request:**
 ```json
 {
   "userId": 50,
-  "totalAmount": 99.99
+  "totalAmount": 99.99,
+  "idempotencyKey": "unique-key-123"
 }
 ```
 
@@ -126,6 +129,7 @@ The platform will start on `http://localhost:8083`
   "id": 1,
   "userId": 50,
   "orderNumber": "ORD-A1B2C3D4",
+  "idempotencyKey": "unique-key-123",
   "totalAmount": 99.99,
   "status": "PENDING",
   "createdAt": "2026-09-14T18:00:00",
@@ -133,6 +137,8 @@ The platform will start on `http://localhost:8083`
   "deliveredAt": null
 }
 ```
+
+**Note:** `idempotencyKey` is optional. If provided, duplicate requests with the same key will return the existing order instead of creating a new one.
 
 ### Payment API
 
@@ -270,6 +276,120 @@ The platform supports both synchronous and asynchronous notification sending:
 
 - **Use Sync** when: The notification is critical and the user must wait for confirmation
 - **Use Async** when: Performance is important and notification can be processed in the background
+
+## Idempotency Key (1.1)
+
+### What is Idempotency?
+
+Idempotency ensures that making the same request multiple times produces the same result as making it once. This prevents duplicate orders when users accidentally submit the same request multiple times (e.g., double-clicking a "Submit" button).
+
+### How It Works
+
+1. Client includes a unique `idempotencyKey` in the request
+2. Server checks if an order with this key already exists
+3. If exists → returns the existing order
+4. If not exists → creates a new order and saves the key
+
+### API Usage
+
+**Create Order with Idempotency Key:**
+```json
+{
+  "userId": 100,
+  "totalAmount": 99.99,
+  "idempotencyKey": "unique-key-123"
+}
+```
+
+**First Request:**
+```json
+{
+  "id": 1,
+  "userId": 100,
+  "orderNumber": "ORD-ABC123",
+  "idempotencyKey": "unique-key-123",
+  "totalAmount": 99.99,
+  "status": "PENDING"
+}
+```
+
+**Second Request (same key):**
+```json
+{
+  "id": 1,
+  "userId": 100,
+  "orderNumber": "ORD-ABC123",
+  "idempotencyKey": "unique-key-123",
+  "totalAmount": 99.99,
+  "status": "PENDING"
+}
+```
+→ Same order returned, no duplicate created
+
+### Benefits
+
+- **Prevents Duplicate Orders**: Users can't accidentally create multiple orders
+- **Safe Retries**: Clients can safely retry failed requests without creating duplicates
+- **Better UX**: No need for "Are you sure?" confirmations
+- **Database Integrity**: Unique constraint at database level ensures consistency
+
+### Implementation
+
+- `Order.idempotencyKey` column with unique constraint
+- `OrderRepository.findByIdempotencyKey()` to check for existing orders
+- `OrderService` checks for existing key before creating new order
+
+## Notification Status Tracking (1.2)
+
+### What is Notification Status Tracking?
+
+This feature tracks the status of notifications sent for each order, allowing you to know whether a notification was successfully delivered or failed.
+
+### How It Works
+
+1. When an order is created with async notification, a `notification_status` record is created with status `PENDING`
+2. When the notification is successfully sent, status updates to `SENT`
+3. If the notification fails, status updates to `FAILED` with error message
+4. You can query the notification status for any order
+
+### API Usage
+
+**Get Notification Status:**
+```bash
+GET /api/orders/{orderId}/notification-status
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "orderId": 1,
+  "status": "SENT",
+  "errorMessage": null,
+  "createdAt": "2026-10-25T16:42:30",
+  "updatedAt": "2026-10-25T16:42:30"
+}
+```
+
+**Status Values:**
+- `PENDING`: Notification waiting to be sent
+- `SENT`: Notification successfully delivered
+- `FAILED`: Notification failed to send (check `errorMessage`)
+
+### Benefits
+
+- **Track Failed Notifications**: Know which orders didn't receive notifications
+- **Retry Failed Notifications**: Can retry failed notifications manually or automatically
+- **Audit Trail**: Complete history of when notifications were sent
+- **Customer Support**: Verify if a customer claims they didn't receive a notification
+- **Analytics**: Monitor notification success/failure rates
+
+### Implementation
+
+- `NotificationStatusRecord` entity with orderId, status, errorMessage, timestamps
+- `NotificationStatusRepository` to query status by orderId
+- `OrderService` creates PENDING record, updates to SENT/FAILED in async callback
+- API endpoint `GET /api/orders/{orderId}/notification-status`
 
 ## Notification System Architecture
 

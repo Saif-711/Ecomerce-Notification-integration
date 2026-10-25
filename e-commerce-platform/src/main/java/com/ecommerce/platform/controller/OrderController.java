@@ -1,6 +1,8 @@
 package com.ecommerce.platform.controller;
 
+import com.ecommerce.platform.domain.NotificationStatusRecord;
 import com.ecommerce.platform.domain.Order;
+import com.ecommerce.platform.dto.NotificationStatusResponse;
 import com.ecommerce.platform.dto.OrderRequest;
 import com.ecommerce.platform.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,5 +53,20 @@ public class OrderController {
     public ResponseEntity<Order> getOrder(@PathVariable Long orderId) {
         Order order = orderService.getOrder(orderId);
         return ResponseEntity.ok(order);
+    }
+
+    @GetMapping("/{orderId}/notification-status")
+    @Operation(summary = "Get notification status", description = "Get notification status for an order")
+    public ResponseEntity<NotificationStatusResponse> getNotificationStatus(@PathVariable Long orderId) {
+        NotificationStatusRecord statusRecord = orderService.getNotificationStatus(orderId);
+        NotificationStatusResponse response = new NotificationStatusResponse(
+                statusRecord.getId(),
+                statusRecord.getOrderId(),
+                statusRecord.getStatus().name(),
+                statusRecord.getErrorMessage(),
+                statusRecord.getCreatedAt(),
+                statusRecord.getUpdatedAt()
+        );
+        return ResponseEntity.ok(response);
     }
 }

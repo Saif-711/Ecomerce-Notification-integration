@@ -1,6 +1,11 @@
 # Compiled class files
 *.class
 
+
+/e-commerce-platform/target/
+/e-commerce-platform/logs/
+/e-commerce-platform/.idea/
+
 # Log files
 *.log
 logs/

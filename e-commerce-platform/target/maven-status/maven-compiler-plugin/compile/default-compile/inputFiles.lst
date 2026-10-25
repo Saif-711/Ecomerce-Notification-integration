@@ -9,6 +9,7 @@ C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\controller\ShipmentController.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\controller\UserController.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\domain\Category.java
+C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\domain\NotificationStatusRecord.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\domain\Order.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\domain\Payment.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\domain\Product.java
@@ -19,6 +20,7 @@ C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\LoginRequest.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\NotificationChannel.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\NotificationRequest.java
+C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\NotificationStatusResponse.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\OrderRequest.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\PaymentRequest.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\ProductRequest.java
@@ -27,10 +29,12 @@ C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\UserRequest.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\dto\UserResponse.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\EcommercePlatformApplication.java
+C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\model\NotificationStatus.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\model\OrderStatus.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\model\PaymentStatus.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\model\ShipmentStatus.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\repository\CategoryRepository.java
+C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\repository\NotificationStatusRepository.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\repository\OrderRepository.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\repository\PaymentRepository.java
 C:\Users\Said neirat\Downloads\system-design-coding\e-commerce-platform\src\main\java\com\ecommerce\platform\repository\ProductRepository.java

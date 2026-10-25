@@ -1,9 +1,12 @@
 package com.ecommerce.platform.service;
 
 import com.ecommerce.platform.client.NotificationClient;
+import com.ecommerce.platform.domain.NotificationStatusRecord;
 import com.ecommerce.platform.domain.Order;
 import com.ecommerce.platform.dto.NotificationChannel;
+import com.ecommerce.platform.model.NotificationStatus;
 import com.ecommerce.platform.model.OrderStatus;
+import com.ecommerce.platform.repository.NotificationStatusRepository;
 import com.ecommerce.platform.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -24,6 +27,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final NotificationClient notificationClient;
+    private final NotificationStatusRepository notificationStatusRepository;
 
     @Transactional
     public Order createOrder(Long userId, BigDecimal totalAmount, String idempotencyKey) {
@@ -69,6 +73,12 @@ public class OrderService {
         order.setIdempotencyKey(idempotencyKey);
         order = orderRepository.save(order);
 
+        // Create notification status record as PENDING
+        NotificationStatusRecord statusRecord = new NotificationStatusRecord();
+        statusRecord.setOrderId(order.getId());
+        statusRecord.setStatus(NotificationStatus.PENDING);
+        notificationStatusRepository.save(statusRecord);
+
         log.info("Order created (async notification): {}", orderNumber);
 
         // Send notification asynchronously - doesn't block order creation
@@ -81,8 +91,15 @@ public class OrderService {
         notificationFuture.whenComplete((result, ex) -> {
             if (ex != null) {
                 log.error("Async notification failed for order {}: {}", orderNumber, ex.getMessage());
+                // Update notification status to FAILED
+                statusRecord.setStatus(NotificationStatus.FAILED);
+                statusRecord.setErrorMessage(ex.getMessage());
+                notificationStatusRepository.save(statusRecord);
             } else {
                 log.info("Async notification sent successfully for order {}", orderNumber);
+                // Update notification status to SENT
+                statusRecord.setStatus(NotificationStatus.SENT);
+                notificationStatusRepository.save(statusRecord);
             }
         });
 
@@ -130,5 +147,10 @@ public class OrderService {
     public Order getOrder(Long orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+    }
+
+    public NotificationStatusRecord getNotificationStatus(Long orderId) {
+        return notificationStatusRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new RuntimeException("Notification status not found for order: " + orderId));
     }
 }
