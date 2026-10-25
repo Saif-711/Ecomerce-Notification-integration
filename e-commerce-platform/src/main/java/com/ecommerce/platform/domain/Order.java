@@ -25,6 +25,9 @@ public class Order {
     @Column(nullable = false)
     private String orderNumber;
 
+    @Column(unique = true)
+    private String idempotencyKey;
+
     @Column(nullable = false)
     private BigDecimal totalAmount;
 

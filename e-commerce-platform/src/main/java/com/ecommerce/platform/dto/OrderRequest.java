@@ -17,4 +17,6 @@ public class OrderRequest {
 
     @NotNull
     private BigDecimal totalAmount;
+
+    private String idempotencyKey;
 }

@@ -12,24 +12,34 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.concurrent.CompletableFuture;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
-    
+
     private final OrderRepository orderRepository;
     private final NotificationClient notificationClient;
 
     @Transactional
-    public Order createOrder(Long userId, BigDecimal totalAmount) {
+    public Order createOrder(Long userId, BigDecimal totalAmount, String idempotencyKey) {
+        // Check if order with same idempotency key already exists
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            Order existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
+            if (existingOrder != null) {
+                log.info("Order already exists with idempotency key: {}, returning existing order: {}", idempotencyKey, existingOrder.getOrderNumber());
+                return existingOrder;
+            }
+        }
+
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
         Order order = new Order(userId, orderNumber, totalAmount);
+        order.setIdempotencyKey(idempotencyKey);
         order = orderRepository.save(order);
 
         log.info("Order created: {}", orderNumber);
@@ -43,10 +53,20 @@ public class OrderService {
     }
 
     @Transactional
-    public Order createOrderAsync(Long userId, BigDecimal totalAmount) {
+    public Order createOrderAsync(Long userId, BigDecimal totalAmount, String idempotencyKey) {
+        // Check if order with same idempotency key already exists
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            Order existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
+            if (existingOrder != null) {
+                log.info("Order already exists with idempotency key: {}, returning existing order: {}", idempotencyKey, existingOrder.getOrderNumber());
+                return existingOrder;
+            }
+        }
+
         String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 
         Order order = new Order(userId, orderNumber, totalAmount);
+        order.setIdempotencyKey(idempotencyKey);
         order = orderRepository.save(order);
 
         log.info("Order created (async notification): {}", orderNumber);
