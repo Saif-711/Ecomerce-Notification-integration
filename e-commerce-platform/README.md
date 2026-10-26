@@ -30,7 +30,9 @@ flowchart TB
 ## Key Features
 
 - **Black Box Integration**: E-commerce platform only knows the HTTP API endpoint
-- **Asynchronous Notifications**: All notifications are sent via HTTP 202 Accepted
+- **Asynchronous Notifications**: All order notifications are sent asynchronously for better performance
+- **Idempotency**: Prevents duplicate orders with idempotency keys
+- **Notification Status Tracking**: Track delivery status of notifications
 - **Multiple Channels**: Supports EMAIL, SMS, and WEBHOOK notifications
 - **Automatic Notifications**: Triggers notifications on order creation, payment, shipping, and delivery
 
@@ -58,25 +60,29 @@ e-commerce-platform/
 │   │   ├── PaymentController.java
 │   │   └── ShipmentController.java
 │   ├── domain/
-│   │   ├── Order.java
+│   │   ├── Order.java                        ← Includes idempotencyKey
+│   │   ├── NotificationStatusRecord.java    ← Notification tracking
 │   │   ├── Payment.java
 │   │   └── Shipment.java
 │   ├── dto/
 │   │   ├── NotificationChannel.java
 │   │   ├── NotificationRequest.java
-│   │   ├── OrderRequest.java
+│   │   ├── NotificationStatusResponse.java  ← Notification status API
+│   │   ├── OrderRequest.java                 ← Includes idempotencyKey
 │   │   ├── PaymentRequest.java
 │   │   └── ShipmentRequest.java
 │   ├── model/
+│   │   ├── NotificationStatus.java          ← PENDING, SENT, FAILED
 │   │   ├── OrderStatus.java
 │   │   ├── PaymentStatus.java
 │   │   └── ShipmentStatus.java
 │   ├── repository/
-│   │   ├── OrderRepository.java
+│   │   ├── NotificationStatusRepository.java
+│   │   ├── OrderRepository.java              ← findByIdempotencyKey()
 │   │   ├── PaymentRepository.java
 │   │   └── ShipmentRepository.java
 │   └── service/
-│       ├── OrderService.java
+│       ├── OrderService.java                 ← Async notification + tracking
 │       ├── PaymentService.java
 │       └── ShipmentService.java
 └── src/main/resources/
@@ -107,8 +113,7 @@ The platform will start on `http://localhost:8083`
 
 | Endpoint | Method | Description | Notification Sent |
 |----------|--------|-------------|-------------------|
-| `/api/orders` | POST | Create a new order (sync notification) | EMAIL: Order confirmation |
-| `/api/orders/async` | POST | Create a new order (async notification) | EMAIL: Order confirmation |
+| `/api/orders` | POST | Create a new order (async notification) | EMAIL: Order confirmation |
 | `/api/orders/{id}/ship` | POST | Mark order as shipped | EMAIL: Shipping notification |
 | `/api/orders/{id}/deliver` | POST | Mark order as delivered | SMS: Delivery notification |
 | `/api/orders/{id}` | GET | Get order details | None |
@@ -222,9 +227,9 @@ notification:
    ```bash
    curl -X POST http://localhost:8083/api/orders \
      -H "Content-Type: application/json" \
-     -d '{"userId": 50, "totalAmount": 99.99}'
+     -d '{"userId": 50, "totalAmount": 99.99, "idempotencyKey": "unique-key-123"}'
    ```
-   → Notification sent: EMAIL "Order #ORD-A1B2C3D4 confirmed!"
+   → Order created immediately, notification sent asynchronously: EMAIL "Order #ORD-A1B2C3D4 confirmed!"
 
 2. **Payment is processed**:
    ```bash
@@ -254,28 +259,44 @@ notification:
 - **Flexibility**: Easy to add new notification channels without changing e-commerce code
 - **Testability**: Can mock NotificationClient for testing
 
-## Sync vs Async Notifications
+## Async Notifications
 
-The platform supports both synchronous and asynchronous notification sending:
+The platform uses **asynchronous notification sending** for all order creation requests:
 
-### Performance Comparison
+### Performance Benefits
 
 | Endpoint | Response Time | Behavior |
 |----------|---------------|----------|
-| **Sync** (`/api/orders`) | ~46 ms | Blocks until notification completes, then returns |
-| **Async** (`/api/orders/async`) | ~17 ms | Returns immediately, notification sent in background |
-| **Improvement** | **2.8x faster** | Async is significantly faster for the user |
+| **Async** (`/api/orders`) | ~17 ms | Returns immediately, notification sent in background |
 
-### Why Async is Faster
+### Why Async?
 
-- **Sync**: The HTTP request waits for the notification HTTP call to complete before returning the response to the user
-- **Async**: The HTTP request returns immediately after saving the order, while the notification is sent in a background thread
-- The ~30ms difference represents the time saved by not waiting for the external HTTP call to the Notification System
+- **Order is always saved**: Even if the notification fails, the order is preserved
+- **Faster response**: Users get immediate feedback (~17ms vs ~46ms for sync)
+- **Better resilience**: Notification System failures don't break order creation
+- **Background processing**: Notifications are sent without blocking the user
 
-### When to Use Each
+### How It Works
 
-- **Use Sync** when: The notification is critical and the user must wait for confirmation
-- **Use Async** when: Performance is important and notification can be processed in the background
+1. Order is saved to database
+2. Notification status is created as `PENDING`
+3. Notification is sent asynchronously in background thread
+4. Status updates to `SENT` or `FAILED` based on result
+5. User gets immediate response with order details
+
+## Production Best Practice: Async-Only Design (1.3)
+
+### Why We Use Only Async
+
+Following production best practices, the platform uses **only asynchronous notification sending** for order creation:
+
+**Reasons:**
+1. **Order preservation is critical**: The order must be saved even if notification fails
+2. **Better user experience**: Faster response times (~17ms vs ~46ms for sync)
+3. **System resilience**: Notification System failures don't break order creation
+4. **Simpler architecture**: Single endpoint, predictable behavior
+
+**This ensures that business logic (order creation) is never blocked by auxiliary services (notifications).**
 
 ## Idempotency Key (1.1)
 

@@ -46,40 +46,13 @@ public class OrderService {
         order.setIdempotencyKey(idempotencyKey);
         order = orderRepository.save(order);
 
-        log.info("Order created: {}", orderNumber);
-
-        // Send notification to user
-        String message = String.format("Order #%s confirmed! Total: $%.2f. Thank you for your purchase.",
-                orderNumber, totalAmount);
-        notificationClient.sendNotification(userId, NotificationChannel.EMAIL, message);
-
-        return order;
-    }
-
-    @Transactional
-    public Order createOrderAsync(Long userId, BigDecimal totalAmount, String idempotencyKey) {
-        // Check if order with same idempotency key already exists
-        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
-            Order existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
-            if (existingOrder != null) {
-                log.info("Order already exists with idempotency key: {}, returning existing order: {}", idempotencyKey, existingOrder.getOrderNumber());
-                return existingOrder;
-            }
-        }
-
-        String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-
-        Order order = new Order(userId, orderNumber, totalAmount);
-        order.setIdempotencyKey(idempotencyKey);
-        order = orderRepository.save(order);
-
         // Create notification status record as PENDING
         NotificationStatusRecord statusRecord = new NotificationStatusRecord();
         statusRecord.setOrderId(order.getId());
         statusRecord.setStatus(NotificationStatus.PENDING);
         notificationStatusRepository.save(statusRecord);
 
-        log.info("Order created (async notification): {}", orderNumber);
+        log.info("Order created: {}", orderNumber);
 
         // Send notification asynchronously - doesn't block order creation
         String message = String.format("Order #%s confirmed! Total: $%.2f. Thank you for your purchase.",
