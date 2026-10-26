@@ -40,6 +40,9 @@ flowchart TB
 
 - **Java 17**
 - **Maven**
+- **MySQL** running on `localhost:3306`
+  - Ensure MySQL is installed and running
+  - Default credentials: username `root`, password (empty)
 - **Notification System** running on `localhost:8082`
   - Start it first: `cd ../Notification-System && docker-compose up -d`
   - Then run: `mvn spring-boot:run` (from notification-service directory)
@@ -504,18 +507,77 @@ public Shipment createShipment(Long userId, Long orderId, String shippingAddress
 - Verify the notification service URL in `application.yml`
 
 **Database errors?**
-- The e-commerce platform uses H2 in-memory database
-- Access H2 console at: `http://localhost:8083/h2-console`
-- JDBC URL: `jdbc:h2:mem:ecommerce`
+- The e-commerce platform uses MySQL for persistent storage
+- Ensure MySQL is running on `localhost:3306`
+- Database name: `ecommerce` (auto-created if not exists)
+- Default credentials: username `root`, password (empty)
+- Access MySQL: `mysql -u root -p ecommerce`
+
+## Databases
+
+### 1. E-Commerce Platform
+**Database:** MySQL (Persistent Storage)
+
+- **URL:** `jdbc:mysql://localhost:3306/ecommerce`
+- **Username:** `root`
+- **Password:** (empty)
+- **Database Name:** `ecommerce` (auto-created if not exists)
+- **Behavior:** `ddl-auto: update` → Schema updated but not dropped
+
+**Access MySQL:**
+```bash
+# Via command line
+mysql -u root -p ecommerce
+
+# Or via MySQL Workbench / DBeaver
+Host: localhost
+Port: 3306
+Database: ecommerce
+Username: root
+Password: (empty)
+```
+
+### 2. Notification System
+**Database:** MySQL
+
+- **URL:** `jdbc:mysql://localhost:3306/notifications`
+- **Username:** `root`
+- **Password:** (empty)
+- **Database Name:** `notifications`
+- **Behavior:** `ddl-auto: update` → Schema updated but not dropped
+
+**Access MySQL:**
+```bash
+# Via command line
+mysql -u root -p notifications
+
+# Or via MySQL Workbench / DBeaver
+Host: localhost
+Port: 3306
+Database: notifications
+Username: root
+Password: (empty)
+```
+
+### Summary
+
+| Service | Database Type | Location | Persistence |
+|---------|--------------|----------|-------------|
+| E-Commerce Platform | MySQL | `localhost:3306/ecommerce` | Persistent |
+| Notification System | MySQL | `localhost:3306/notifications` | Persistent |
+
+**Note:** Both services now use MySQL for persistent storage. Data is preserved across application restarts.
 
 ## Technology Stack
 
-- **Spring Boot 3.2.0**
+- **Spring Boot 3.3.5**
 - **Spring Data JPA**
-- **H2 Database** (in-memory)
+- **MySQL** (persistent storage)
 - **Lombok**
 - **RestTemplate** (for HTTP client)
 - **Jakarta Validation**
+- **Resilience4j** (circuit breaker)
+- **Spring Retry** (retry mechanism)
 
 
 
