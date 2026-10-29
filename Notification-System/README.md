@@ -39,6 +39,7 @@ graph LR
 - **Java 17**
 - **Maven**
 - **Docker Desktop** (for MySQL + Kafka)
+- **Resend API Key** (for real email delivery) - Get one at https://resend.com
 
 ## Quick Start
 
@@ -62,7 +63,34 @@ mvn spring-boot:run
 
 The application will start on `http://localhost:8082`
 
-### 3. Send a Notification
+### 3. Configure Email Provider (Resend)
+
+Option 1: Using `.env` file (recommended for development)
+
+Create a `.env` file in the `Notification-System` directory:
+
+```bash
+RESEND_API_KEY=your-resend-api-key-here
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+```
+
+The application uses `spring-dotenv` to automatically load environment variables from the `.env` file.
+
+Option 2: Using environment variables
+
+```bash
+# Windows PowerShell
+$env:RESEND_API_KEY="your-resend-api-key"
+$env:RESEND_FROM_EMAIL="your-email@yourdomain.com"
+
+# Linux/Mac
+export RESEND_API_KEY="your-resend-api-key"
+export RESEND_FROM_EMAIL="your-email@yourdomain.com"
+```
+
+**Note:** Get your API key from https://resend.com. The `from` email must be a verified domain in your Resend account.
+
+### 4. Send a Notification
 
 ```bash
 curl -X POST http://localhost:8082/notifications \
@@ -70,7 +98,8 @@ curl -X POST http://localhost:8082/notifications \
   -d '{
     "userId": 100,
     "channel": "EMAIL",
-    "message": "Your order has been confirmed!"
+    "message": "Your order has been confirmed!",
+    "recipientEmail": "customer@example.com"
   }'
 ```
 
@@ -86,6 +115,8 @@ Response:
 }
 ```
 
+**Note:** `recipientEmail` is optional. If not provided, the system uses a fallback email format.
+
 ## API Endpoints
 
 ### Create Notification
@@ -98,6 +129,7 @@ Request body:
   "userId": 100,
   "channel": "EMAIL",
   "message": "Your order has been confirmed!",
+  "recipientEmail": "customer@example.com",
   "scheduledAt": "2024-10-25T10:00:00"
 }
 ```
@@ -106,6 +138,8 @@ Request body:
 - `EMAIL`
 - `SMS`
 - `WEBHOOK`
+
+**recipientEmail** (optional): For EMAIL channel, specify the recipient email. If not provided, a fallback email format is used.
 
 **scheduledAt** (optional): If provided, notification will be sent at the specified time. If omitted or in the past, sent immediately.
 
@@ -156,10 +190,11 @@ Response:
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | BIGINT | Primary key |
+| `id` | VARCHAR | Primary key (UUID) |
 | `user_id` | BIGINT | User ID |
 | `channel` | VARCHAR | EMAIL/SMS/WEBHOOK |
 | `message` | TEXT | Notification message |
+| `recipient_email` | VARCHAR | Recipient email for EMAIL channel (nullable) |
 | `status` | VARCHAR | PENDING/PROCESSING/SENT/FAILED |
 | `scheduled_at` | TIMESTAMP | When to send (nullable) |
 | `created_at` | TIMESTAMP | Creation time |
@@ -176,6 +211,52 @@ Response:
 ### Kafka
 - **Host:** `localhost:9092`
 - **Mode:** KRaft (no ZooKeeper)
+
+### Resend (Email Provider)
+- **API Key:** Set via `RESEND_API_KEY` environment variable
+- **From Email:** Set via `RESEND_FROM_EMAIL` environment variable
+- **Get API Key:** https://resend.com
+
+## Email Integration with Resend
+
+The Notification System now integrates with **Resend** for real email delivery.
+
+### How It Works
+
+1. **E-Commerce Platform** sends notification request with `recipientEmail`
+2. **Notification System** saves to MySQL with recipient email
+3. **Kafka** routes to email topic
+4. **EmailWorker** uses Resend API to send real email
+5. **MySQL** status updated to `SENT` on success
+
+### Configuration
+
+Option 1: Using `.env` file (recommended)
+
+Create a `.env` file in the Notification-System directory:
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxxxxx
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+```
+
+Option 2: Using environment variables
+
+```bash
+export RESEND_API_KEY="re_xxxxxxxxxxxx"
+export RESEND_FROM_EMAIL="noreply@yourdomain.com"
+```
+
+### Benefits
+
+- **Real Email Delivery** - Actual emails sent to recipients' inboxes
+- **Reliable** - Resend handles deliverability, retries, and bounces
+- **Scalable** - No need to manage SMTP servers
+- **Trackable** - Get email delivery status via Resend dashboard
+
+### Testing Without API Key
+
+If you don't have a Resend API key, the system will log an error but won't crash. The email won't be sent, and the notification status won't be updated to `SENT`.
 
 ## Project Structure
 
@@ -238,3 +319,4 @@ For resilience, the E-Commerce Platform uses:
 - **MySQL 8**
 - **Apache Kafka 3.7.1** (KRaft mode)
 - **Docker Compose**
+- **Resend** (Email delivery)

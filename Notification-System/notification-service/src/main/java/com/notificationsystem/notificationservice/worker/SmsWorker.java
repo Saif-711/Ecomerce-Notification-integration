@@ -26,6 +26,14 @@ public class SmsWorker {
 
     @KafkaListener(topics = "${notification.kafka.topics.sms}", groupId = "sms-worker")
     public void sendSms(NotificationEvent event) {
+        log.info("Processing SMS notification for user {}", event.getUserId());
+
+        // Idempotency check: skip if already SENT
+        if (deliveryService.isAlreadySent(event.getId())) {
+            log.info("Notification {} is already SENT, skipping SMS send", event.getId());
+            return;
+        }
+
         log.info("Sending SMS to user {}", event.getUserId());
         System.out.println("Sending SMS to user " + event.getUserId());
         deliveryService.markSent(event.getId());

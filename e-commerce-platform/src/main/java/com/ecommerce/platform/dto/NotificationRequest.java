@@ -25,6 +25,9 @@ public class NotificationRequest {
     @NotBlank(message = "Message cannot be null or empty")
     private String message;
 
+    // Optional recipient email for EMAIL channel
+    private String recipientEmail;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime scheduledAt;
 }

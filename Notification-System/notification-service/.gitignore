@@ -1,5 +1,6 @@
 .mvn/
 target/
+.env
 .idea/
 *.iml
 .classpath

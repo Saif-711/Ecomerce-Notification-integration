@@ -30,7 +30,7 @@ public class OrderService {
     private final NotificationStatusRepository notificationStatusRepository;
 
     @Transactional
-    public Order createOrder(Long userId, BigDecimal totalAmount, String idempotencyKey) {
+    public Order createOrder(Long userId, BigDecimal totalAmount, String idempotencyKey, String recipientEmail) {
         // Check if order with same idempotency key already exists
         if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
             Order existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
@@ -58,7 +58,7 @@ public class OrderService {
         String message = String.format("Order #%s confirmed! Total: $%.2f. Thank you for your purchase.",
                 orderNumber, totalAmount);
         CompletableFuture<Void> notificationFuture = notificationClient.sendNotificationAsync(
-                userId, NotificationChannel.EMAIL, message);
+                userId, NotificationChannel.EMAIL, message, recipientEmail);
 
         // Handle async completion (optional - for logging or error handling)
         notificationFuture.whenComplete((result, ex) -> {

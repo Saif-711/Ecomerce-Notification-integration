@@ -23,7 +23,7 @@ public class OrderController {
     @PostMapping
     @Operation(summary = "Create order", description = "Create a new order with asynchronous notification")
     public ResponseEntity<Order> createOrder(@Valid @RequestBody OrderRequest request) {
-        Order order = orderService.createOrder(request.getUserId(), request.getTotalAmount(), request.getIdempotencyKey());
+        Order order = orderService.createOrder(request.getUserId(), request.getTotalAmount(), request.getIdempotencyKey(), request.getRecipientEmail());
         return ResponseEntity.ok(order);
     }
 

@@ -8,11 +8,11 @@ package com.notificationsystem.notificationservice.model;
  *
  * Flow today:
  * PENDING → PROCESSING → SENT
- * FAILED is ready for a later retry / DLQ step.
+ * PROCESSING → FAILED after worker retries are exhausted
  */
 public enum NotificationStatus {
     PENDING,     // saved, waiting (maybe scheduled for later)
     PROCESSING,  // already given to Kafka, workers are handling it
-    SENT,        // worker finished (for now we only print, we do not call a real email company)
-    FAILED       // not used yet; will mean "we tried and it did not work"
+    SENT,        // worker finished
+    FAILED       // worker tried and it did not work
 }

@@ -6,9 +6,11 @@ import com.notificationsystem.notificationservice.repository.NotificationReposit
 import com.notificationsystem.notificationservice.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -31,12 +33,15 @@ public class NotificationScheduler {
 
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
+    private final Duration staleProcessingAfter;
 
     public NotificationScheduler(
             NotificationRepository notificationRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            @Value("${notification.processing-stale-after:2m}") Duration staleProcessingAfter) {
         this.notificationRepository = notificationRepository;
         this.notificationService = notificationService;
+        this.staleProcessingAfter = staleProcessingAfter;
     }
 
     // fixedDelay = 1000 → wait 1 second after the previous run FINISHES, then run again
@@ -51,6 +56,25 @@ public class NotificationScheduler {
             log.info("Publishing scheduled notification {}", notification.getId());
             // publish() will skip the row if it is no longer PENDING (safe if two runs overlap)
             notificationService.publish(notification);
+        }
+
+        recoverStaleProcessing();
+    }
+
+    /**
+     * PROCESSING rows that never reached SENT/FAILED (worker crash, swallowed error,
+     * Kafka message lost) are reset to PENDING so publish() can put them on Kafka again.
+     */
+    private void recoverStaleProcessing() {
+        LocalDateTime staleBefore = LocalDateTime.now().minus(staleProcessingAfter);
+        List<Notification> stuck = notificationRepository.findStaleByStatus(
+                NotificationStatus.PROCESSING,
+                staleBefore
+        );
+
+        for (Notification notification : stuck) {
+            log.warn("Recovering stuck PROCESSING notification {}", notification.getId());
+            notificationService.recoverStuck(notification);
         }
     }
 }

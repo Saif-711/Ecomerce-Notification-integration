@@ -1,0 +1,18 @@
+# Environment variables
+/notification-service/.env
+
+# Logs
+/notification-service/logs/
+*.log
+
+# IDE
+.idea/
+*.iml
+
+# Build
+target/
+*.class
+
+# OS
+.DS_Store
+Thumbs.db

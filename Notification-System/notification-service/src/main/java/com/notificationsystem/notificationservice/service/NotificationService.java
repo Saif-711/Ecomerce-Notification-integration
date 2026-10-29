@@ -8,10 +8,10 @@ import com.notificationsystem.notificationservice.repository.NotificationReposit
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * NotificationService = the brain of "create a notification".
@@ -41,7 +41,6 @@ public class NotificationService {
         this.notificationsTopic = notificationsTopic;
     }
 
-    @Transactional // save to DB as one unit of work
     public void create(NotificationRequest request) {
         LocalDateTime now = LocalDateTime.now();
         Notification notification = new Notification();
@@ -49,15 +48,17 @@ public class NotificationService {
         notification.setUserId(request.getUserId());
         notification.setChannel(request.getChannel());
         notification.setMessage(request.getMessage());
+        notification.setRecipientEmail(request.getRecipientEmail());
         notification.setStatus(NotificationStatus.PENDING);
         // No scheduledAt from client → treat as "send now"
         notification.setScheduledAt(request.getScheduledAt() != null ? request.getScheduledAt() : now);
         notification.setCreatedAt(now);
-        notificationRepository.save(notification);
+        notification.setUpdatedAt(now);
+        // Commit the row before Kafka so the worker can find it
+        notificationRepository.saveAndFlush(notification);
 
         // isAfter(now) means the time is still in the future → wait for the scheduler
         if (!notification.getScheduledAt().isAfter(now)) {
-            //in other words if(notification.getScheduledAt()<=now)
             publish(notification);
         }
     }
@@ -66,7 +67,6 @@ public class NotificationService {
      * Put the job on Kafka topic "notifications".
      * Called from create() for immediate jobs, and from the scheduler for future jobs.
      */
-    @Transactional
     public void publish(Notification notification) {
         // Claim the row: PENDING → PROCESSING. claimed == 0 means someone else already took it.
         int claimed = notificationRepository.updateStatusIfCurrent(
@@ -78,19 +78,43 @@ public class NotificationService {
             return;
         }
 
+        sendToKafka(notification);
+    }
+
+    public void recoverStuck(Notification notification) {
+        int reset = notificationRepository.updateStatusIfCurrent(
+                notification.getId(),
+                NotificationStatus.PROCESSING,
+                NotificationStatus.PENDING
+        );
+        if (reset == 0) {
+            return;
+        }
+        publish(notification);
+    }
+
+    private void sendToKafka(Notification notification) {
         NotificationEvent event = new NotificationEvent(
                 notification.getId(),
                 notification.getUserId(),
                 notification.getChannel(),
-                notification.getMessage()
+                notification.getMessage(),
+                notification.getRecipientEmail()
         );
 
-        // IMPORTANT: the second argument is the Kafka KEY.
-        // Same userId always goes to the same partition → messages for one user stay in order.
-        kafkaTemplate.send(
-                notificationsTopic,
-                notification.getUserId().toString(),
-                event
-        );
+        try {
+            kafkaTemplate.send(
+                    notificationsTopic,
+                    notification.getUserId().toString(),
+                    event
+            ).get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            notificationRepository.updateStatusIfCurrent(
+                    notification.getId(),
+                    NotificationStatus.PROCESSING,
+                    NotificationStatus.PENDING
+            );
+            throw new IllegalStateException("Failed to publish notification " + notification.getId(), e);
+        }
     }
 }

@@ -28,6 +28,14 @@ public class WebhookWorker {
 
     @KafkaListener(topics = "${notification.kafka.topics.webhook}", groupId = "webhook-worker")
     public void sendWebhook(NotificationEvent event) {
+        log.info("Processing webhook notification for user {}", event.getUserId());
+
+        // Idempotency check: skip if already SENT
+        if (deliveryService.isAlreadySent(event.getId())) {
+            log.info("Notification {} is already SENT, skipping webhook send", event.getId());
+            return;
+        }
+
         log.info("Sending webhook for user {}", event.getUserId());
         System.out.println("Sending webhook for user " + event.getUserId());
         deliveryService.markSent(event.getId());

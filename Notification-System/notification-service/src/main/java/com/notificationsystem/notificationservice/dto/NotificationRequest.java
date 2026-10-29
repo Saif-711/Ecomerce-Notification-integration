@@ -31,6 +31,9 @@ public class NotificationRequest {
     @NotBlank // not null and not empty text
     private String message;
 
+    // Optional recipient email. If provided, used for EMAIL channel. Otherwise, userId is used to lookup email.
+    private String recipientEmail;
+
     // Optional. If this is in the future, we wait. If missing, we send as soon as possible.
     private LocalDateTime scheduledAt;
 
@@ -60,6 +63,14 @@ public class NotificationRequest {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getRecipientEmail() {
+        return recipientEmail;
+    }
+
+    public void setRecipientEmail(String recipientEmail) {
+        this.recipientEmail = recipientEmail;
     }
 
     public LocalDateTime getScheduledAt() {

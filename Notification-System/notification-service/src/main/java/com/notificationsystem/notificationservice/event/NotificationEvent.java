@@ -21,6 +21,7 @@ public class NotificationEvent {
     private Long userId;
     private Channel channel;
     private String message;
+    private String recipientEmail; // Optional recipient email for EMAIL channel
 
     public NotificationEvent() {
     }
@@ -30,6 +31,14 @@ public class NotificationEvent {
         this.userId = userId;
         this.channel = channel;
         this.message = message;
+    }
+
+    public NotificationEvent(String id, Long userId, Channel channel, String message, String recipientEmail) {
+        this.id = id;
+        this.userId = userId;
+        this.channel = channel;
+        this.message = message;
+        this.recipientEmail = recipientEmail;
     }
 
     public String getId() {
@@ -62,6 +71,14 @@ public class NotificationEvent {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getRecipientEmail() {
+        return recipientEmail;
+    }
+
+    public void setRecipientEmail(String recipientEmail) {
+        this.recipientEmail = recipientEmail;
     }
 
     @Override

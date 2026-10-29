@@ -1,17 +1,20 @@
 spring:
   application:
     name: notification-service
+  config:
+    import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:mysql://localhost:3306/notifications?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3307/notifications?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password:
+    password: root
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
         
   kafka:
     bootstrap-servers: localhost:9092
@@ -28,12 +31,16 @@ spring:
         spring.json.value.default.type: com.notificationsystem.notificationservice.event.NotificationEvent
 
 notification:
+  processing-stale-after: 2m
   kafka:
     topics:
       notifications: notifications
       email: email-notifications
       sms: sms-notifications
       webhook: webhook-notifications
+  resend:
+    api-key: ${RESEND_API_KEY:}
+    from-email: ${RESEND_FROM_EMAIL:}
 
 management:
   endpoints:
@@ -45,7 +52,10 @@ management:
       show-details: always
 
 logging:
+  file:
+    name: logs/notification-service.log
   level:
     com.notificationsystem: INFO
+    me.paulschwarz: DEBUG
 server:
     port: 8082

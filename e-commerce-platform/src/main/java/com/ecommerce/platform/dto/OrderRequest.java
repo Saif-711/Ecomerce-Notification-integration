@@ -19,4 +19,6 @@ public class OrderRequest {
     private BigDecimal totalAmount;
 
     private String idempotencyKey;
+
+    private String recipientEmail;
 }

@@ -38,6 +38,10 @@ public class Notification {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
+    // Optional recipient email for EMAIL channel. If null, userId is used to lookup email.
+    @Column(name = "recipient_email")
+    private String recipientEmail;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private NotificationStatus status;
@@ -52,6 +56,10 @@ public class Notification {
     // Null until a worker successfully handles it
     @Column(name = "sent_at")
     private LocalDateTime sentAt;
+
+    // Bumped on every status change so we can detect stuck PROCESSING rows
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     public Notification() {
         // JPA needs an empty constructor
@@ -89,6 +97,14 @@ public class Notification {
         this.message = message;
     }
 
+    public String getRecipientEmail() {
+        return recipientEmail;
+    }
+
+    public void setRecipientEmail(String recipientEmail) {
+        this.recipientEmail = recipientEmail;
+    }
+
     public NotificationStatus getStatus() {
         return status;
     }
@@ -119,5 +135,13 @@ public class Notification {
 
     public void setSentAt(LocalDateTime sentAt) {
         this.sentAt = sentAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }
