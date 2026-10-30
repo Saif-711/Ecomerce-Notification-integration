@@ -254,6 +254,24 @@ export RESEND_FROM_EMAIL="noreply@yourdomain.com"
 - **Scalable** - No need to manage SMTP servers
 - **Trackable** - Get email delivery status via Resend dashboard
 
+### Resend Free Tier Limitations
+
+**Important:** This project uses Resend's **free tier** for development/testing, which has the following limitation:
+
+- **Only verified recipient emails** can receive emails when using the free `onboarding@resend.dev` domain
+- You must verify recipient emails in your Resend dashboard before sending to them
+- This is a Resend restriction, not a bug in the notification system
+
+**For production use:**
+1. Upgrade to a paid Resend plan with your own domain (e.g., `noreply@yourdomain.com`)
+2. Configure DNS records (SPF, DKIM) for your domain
+3. Once using your own domain, you can send to any email address without verification
+
+**Current setup:**
+- Using free tier with `onboarding@resend.dev`
+- Only verified emails (like the account owner's email) will receive notifications
+- Unverified recipient emails will fail with status `FAILED`
+
 ### Testing Without API Key
 
 If you don't have a Resend API key, the system will log an error but won't crash. The email won't be sent, and the notification status won't be updated to `SENT`.
